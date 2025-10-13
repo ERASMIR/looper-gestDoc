@@ -161,3 +161,49 @@ export async function eliminarArchivo(id, tipo, empresaId, usuarioId = null) {
 }
 
 
+
+
+
+
+export async function obtenerReporteMateriales(usuarioId, empresaId, mesInicio, anioInicio, mesFin, anioFin) {
+  try {
+    let query = `
+      SELECT result_reporte, periodo_mes, periodo_anio
+      FROM reporte_rep
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (usuarioId) {
+      query += ` AND id_usuario = ?`;
+      params.push(usuarioId);
+    }
+    if (empresaId) {
+      query += ` AND empresa_id = ?`;
+      params.push(empresaId);
+    }
+
+    // 🔹 Filtro por rango de fechas
+    if (mesInicio && anioInicio && mesFin && anioFin) {
+      query += `
+        AND ((periodo_anio * 12 + periodo_mes) BETWEEN (? * 12 + ?) AND (? * 12 + ?))
+      `;
+      params.push(anioInicio, mesInicio, anioFin, mesFin);
+    }
+
+    query += ` ORDER BY periodo_anio DESC, periodo_mes DESC`;
+
+    const [rows] = await pool.query(query, params);
+
+    // 🔹 Parseamos el JSON
+    return rows.map(row => ({
+      periodo_mes: row.periodo_mes,
+      periodo_anio: row.periodo_anio,
+      result_reporte: row.result_reporte // ← dejamos el JSON crudo
+    }));
+
+  } catch (error) {
+    console.error("❌ Error en obtenerReporteMateriales:", error);
+    throw error;
+  }
+}

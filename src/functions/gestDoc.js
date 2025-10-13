@@ -1,5 +1,5 @@
 import { app } from '@azure/functions';
-import { obtenerPerfilUsuario, obtenerArchivos, obtenerReportesRep, eliminarArchivo } from '../db/gestDocConsultas.js';
+import { obtenerPerfilUsuario, obtenerArchivos, obtenerReportesRep, eliminarArchivo, obtenerReporteMateriales} from '../db/gestDocConsultas.js';
 
 
 
@@ -272,6 +272,94 @@ app.http('eliminarArchivo', {
     } catch (err) {
       context.log("❌ Error en eliminarArchivo:", err);
       return { status: 500, headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ error: err.message }) };
+    }
+  }
+});
+
+
+
+
+
+app.http('listarReporteMateriales', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  handler: async (req, context) => {
+    try {
+      context.log("📢 Ejecutando listarReporteMateriales...");
+
+      // 🧭 Parámetros desde el query
+      const usuarioId = req.query.get("usuarioId") || null;
+      const empresaId = req.query.get("empresaId") || null;
+      const mesInicio = Number(req.query.get("mesInicio")) || null;
+      const anioInicio = Number(req.query.get("anioInicio")) || null;
+      const mesFin = Number(req.query.get("mesFin")) || null;
+      const anioFin = Number(req.query.get("anioFin")) || null;
+
+      context.log('📥 Params listarReporteMateriales:', {
+        usuarioId, empresaId, mesInicio, anioInicio, mesFin, anioFin
+      });
+
+      // 🔹 Traemos el perfil del usuario
+      const perfilData = usuarioId ? await obtenerPerfilUsuario(usuarioId) : null;
+      if (!perfilData) {
+        return {
+          status: 403,
+          headers: { 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ error: "Usuario no válido o sin perfil asignado" }),
+        };
+      }
+
+      // ⚙️ Normalizamos perfil
+      const rol = Number(perfilData.id_perfil_usuario); // 1=admin, 2=REP, 3=dev
+      const empresaPerfil = Number(perfilData.empresa_id) || null;
+      context.log('👤 perfilData:', { rol, empresaPerfil });
+
+      // 🔒 Filtros según rol
+      let empresaFinal = null;
+      let usuarioFinal = null;
+
+      if (rol === 1) { // admin → toda su empresa
+        empresaFinal = empresaPerfil;
+        usuarioFinal = null;
+      } else if (rol === 2) { // REP → solo sus reportes
+        empresaFinal = empresaPerfil;
+        usuarioFinal = usuario;
+      } else if (rol === 3) { // dev → ve todo
+        empresaFinal = null;
+        usuarioFinal = null;
+      } else {
+        empresaFinal = empresaPerfil ?? null;
+        usuarioFinal = usuario ?? null;
+      }
+
+      context.log('🧪 filtros calculados:', { empresaFinal, usuarioFinal });
+
+      // 🔹 Ejecutamos consulta con rango de fechas
+      const reportes = await obtenerReporteMateriales(
+        usuarioFinal,
+        empresaFinal,
+        mesInicio,
+        anioInicio,
+        mesFin,
+        anioFin
+      );
+
+      context.log("📤 listarReporteMateriales ejemplo:", reportes?.[0]);
+
+      // ✅ Devolvemos resultado
+      return {
+        status: 200,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify(reportes),
+      };
+
+    } catch (err) {
+      context.log("❌ Error en listarReporteMateriales:", err);
+      return {
+        status: 500,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: err.message, stack: err.stack }),
+      };
     }
   }
 });
