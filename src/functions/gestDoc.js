@@ -323,13 +323,13 @@ app.http('listarReporteMateriales', {
         usuarioFinal = null;
       } else if (rol === 2) { // REP → solo sus reportes
         empresaFinal = empresaPerfil;
-        usuarioFinal = usuario;
+        usuarioFinal = usuarioId;
       } else if (rol === 3) { // dev → ve todo
         empresaFinal = null;
         usuarioFinal = null;
       } else {
         empresaFinal = empresaPerfil ?? null;
-        usuarioFinal = usuario ?? null;
+        usuarioFinal = usuarioId ?? null;
       }
 
       context.log('🧪 filtros calculados:', { empresaFinal, usuarioFinal });
