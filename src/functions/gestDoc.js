@@ -1,12 +1,16 @@
 import { app } from '@azure/functions';
-import { obtenerPerfilUsuario, obtenerArchivos, obtenerReportesRep, eliminarArchivo, obtenerReporteMateriales} from '../db/gestDocConsultas.js';
+import { obtenerPerfilUsuario, usuarioTieneEmpresa, obtenerArchivos, obtenerReportesRep, eliminarArchivo, obtenerReporteMateriales} from '../db/gestDocConsultas.js';
 
 
 
 app.http('listarArchivos', {
-  methods: ['GET'],
+  methods: ['GET', 'OPTIONS'],
   authLevel: 'anonymous',
   handler: async (req, context) => {
+    if (req.method === 'OPTIONS') {
+      return { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } };
+    }
+
     try {
       const tipo = req.query.get("tipo") || "matriz";
 
@@ -57,26 +61,34 @@ app.http('listarArchivos', {
       //let usuarioFinal = usuario;
 
 
+      // Determinar empresa efectiva: si el front envía una empresa, validar acceso
+      let empresaEfectiva = empresaPerfil;
+      if (empresa && Number(empresa) !== empresaPerfil) {
+        const tieneAcceso = await usuarioTieneEmpresa(usuario, Number(empresa));
+        if (tieneAcceso) {
+          empresaEfectiva = Number(empresa);
+        }
+      }
+
       // Ajuste de filtros según perfil
       let empresaFinal = null;
       let usuarioFinal = null;
 
-      if (rol === 1) {                 // admin → toda su empresa
-        empresaFinal = empresaPerfil;
+      if (rol === 1) {                 // admin → toda la empresa seleccionada
+        empresaFinal = empresaEfectiva;
         usuarioFinal = null;
-      } else if (rol === 2) {          // REP → solo sus archivos dentro de su empresa
-        empresaFinal = empresaPerfil;  // 🔒 NO usar el query param
+      } else if (rol === 2) {          // REP → solo sus archivos dentro de la empresa seleccionada
+        empresaFinal = empresaEfectiva;
         usuarioFinal = usuario;
-      } else if (rol === 3) {          // dev → sin filtros (ve todo)
-        empresaFinal = null;
+      } else if (rol === 3) {          // dev → filtra por empresa seleccionada si hay
+        empresaFinal = empresaEfectiva ?? null;
         usuarioFinal = null;
       } else {
-        // Rol desconocido → por defecto, restricción mínima razonable
-        empresaFinal = empresaPerfil ?? null;
+        empresaFinal = empresaEfectiva ?? null;
         usuarioFinal = usuario ?? null;
       }
 
-      context.log('🧪 filtros calculados:', { empresaFinal, usuarioFinal });
+      context.log('🧪 filtros calculados:', { empresaEfectiva, empresaFinal, usuarioFinal });
 
 
 
@@ -114,9 +126,13 @@ app.http('listarArchivos', {
 
 
 app.http('listarReportesRep', {
-  methods: ['GET'],
+  methods: ['GET', 'OPTIONS'],
   authLevel: 'anonymous',
   handler: async (req, context) => {
+    if (req.method === 'OPTIONS') {
+      return { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } };
+    }
+
     try {
       context.log("📢 Ejecutando listarReportesRep...");
 
@@ -148,26 +164,34 @@ app.http('listarReportesRep', {
 
       context.log('👤 perfilData:', { rol, empresaPerfil, raw: perfilData });
 
+      // Determinar empresa efectiva: si el front envía una empresa, validar acceso
+      let empresaEfectiva = empresaPerfil;
+      if (empresa && Number(empresa) !== empresaPerfil) {
+        const tieneAcceso = await usuarioTieneEmpresa(usuario, Number(empresa));
+        if (tieneAcceso) {
+          empresaEfectiva = Number(empresa);
+        }
+      }
+
       // 🔹 Ajustamos filtros según perfil
       let empresaFinal = null;
       let usuarioFinal = null;
 
-      if (rol === 1) {                 // admin → todos los reportes de su empresa
-        empresaFinal = empresaPerfil;
+      if (rol === 1) {                 // admin → todos los reportes de la empresa seleccionada
+        empresaFinal = empresaEfectiva;
         usuarioFinal = null;
-      } else if (rol === 2) {          // REP → solo sus reportes
-        empresaFinal = empresaPerfil;  // 🔒 siempre su empresa, no el query param
+      } else if (rol === 2) {          // REP → solo sus reportes de la empresa seleccionada
+        empresaFinal = empresaEfectiva;
         usuarioFinal = usuario;
-      } else if (rol === 3) {          // dev → ve todo
-        empresaFinal = null;
+      } else if (rol === 3) {          // dev → filtra por empresa seleccionada si hay
+        empresaFinal = empresaEfectiva ?? null;
         usuarioFinal = null;
       } else {
-        // rol desconocido → restricción mínima razonable
-        empresaFinal = empresaPerfil ?? null;
+        empresaFinal = empresaEfectiva ?? null;
         usuarioFinal = usuario ?? null;
       }
 
-      context.log('🧪 filtros calculados:', { empresaFinal, usuarioFinal });
+      context.log('🧪 filtros calculados:', { empresaEfectiva, empresaFinal, usuarioFinal });
 
       // 🔹 Llamamos con los filtros correctos
       const reportes = await obtenerReportesRep(usuarioFinal, empresaFinal);
@@ -202,9 +226,13 @@ app.http('listarReportesRep', {
 
 // 🗑️ ELIMINAR ARCHIVO
 app.http('eliminarArchivo', {
-  methods: ['DELETE'],
+  methods: ['DELETE', 'OPTIONS'],
   authLevel: 'anonymous',
   handler: async (req, context) => {
+    if (req.method === 'OPTIONS') {
+      return { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } };
+    }
+
     try {
 
       context.log("📢 Ejecutando eliminarArchivo...");
@@ -245,15 +273,23 @@ app.http('eliminarArchivo', {
 
 
 
+      // Determinar empresa efectiva: si el front envía una empresa, validar acceso
+      let empresaEfectiva = empresa_id;
+      if (empresa && Number(empresa) !== Number(empresa_id)) {
+        const tieneAcceso = await usuarioTieneEmpresa(usuario, Number(empresa));
+        if (tieneAcceso) {
+          empresaEfectiva = Number(empresa);
+        }
+      }
+
       // 🔹 Ajustamos filtros según perfil
-      let empresaFinal = empresa;
+      let empresaFinal = empresaEfectiva;
       let usuarioFinal = usuario;
 
       if (id_perfil_usuario === 1) { // admin
-        empresaFinal = empresa_id; // solo su empresa
-      } else if (id_perfil_usuario === 3) { // dev
-        // puede eliminar todo → no filtramos nada
-        empresaFinal = null;
+        empresaFinal = empresaEfectiva;
+      } else if (id_perfil_usuario === 3) { // dev → respeta empresa seleccionada
+        empresaFinal = empresaEfectiva ?? null;
         usuarioFinal = null;
       }
 
@@ -281,9 +317,13 @@ app.http('eliminarArchivo', {
 
 
 app.http('listarReporteMateriales', {
-  methods: ['GET'],
+  methods: ['GET', 'OPTIONS'],
   authLevel: 'anonymous',
   handler: async (req, context) => {
+    if (req.method === 'OPTIONS') {
+      return { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' } };
+    }
+
     try {
       context.log("📢 Ejecutando listarReporteMateriales...");
 
@@ -314,25 +354,34 @@ app.http('listarReporteMateriales', {
       const empresaPerfil = Number(perfilData.empresa_id) || null;
       context.log('👤 perfilData:', { rol, empresaPerfil });
 
+      // Determinar empresa efectiva: si el front envía una empresa, validar acceso
+      let empresaEfectiva = empresaPerfil;
+      if (empresaId && Number(empresaId) !== empresaPerfil) {
+        const tieneAcceso = await usuarioTieneEmpresa(usuarioId, Number(empresaId));
+        if (tieneAcceso) {
+          empresaEfectiva = Number(empresaId);
+        }
+      }
+
       // 🔒 Filtros según rol
       let empresaFinal = null;
       let usuarioFinal = null;
 
-      if (rol === 1) { // admin → toda su empresa
-        empresaFinal = empresaPerfil;
+      if (rol === 1) { // admin → toda la empresa seleccionada
+        empresaFinal = empresaEfectiva;
         usuarioFinal = null;
-      } else if (rol === 2) { // REP → solo sus reportes
-        empresaFinal = empresaPerfil;
+      } else if (rol === 2) { // REP → solo sus reportes de la empresa seleccionada
+        empresaFinal = empresaEfectiva;
         usuarioFinal = usuarioId;
-      } else if (rol === 3) { // dev → ve todo
-        empresaFinal = null;
+      } else if (rol === 3) { // dev → filtra por empresa seleccionada si hay
+        empresaFinal = empresaEfectiva ?? null;
         usuarioFinal = null;
       } else {
-        empresaFinal = empresaPerfil ?? null;
+        empresaFinal = empresaEfectiva ?? null;
         usuarioFinal = usuarioId ?? null;
       }
 
-      context.log('🧪 filtros calculados:', { empresaFinal, usuarioFinal });
+      context.log('🧪 filtros calculados:', { empresaEfectiva, empresaFinal, usuarioFinal });
 
       // 🔹 Ejecutamos consulta con rango de fechas
       const reportes = await obtenerReporteMateriales(

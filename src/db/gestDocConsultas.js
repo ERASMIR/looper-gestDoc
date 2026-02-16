@@ -4,12 +4,21 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function obtenerPerfilUsuario(usuarioId) {
   const [rows] = await pool.query(
-    `SELECT id_perfil_usuario, empresa_id 
-     FROM datos_usuarios 
+    `SELECT id_perfil_usuario, empresa_id
+     FROM datos_usuarios
      WHERE id = ?`,
     [usuarioId]
   );
   return rows.length ? rows[0] : null;
+}
+
+// Verifica si el usuario tiene acceso a la empresa seleccionada
+export async function usuarioTieneEmpresa(usuarioId, empresaId) {
+  const [rows] = await pool.query(
+    `SELECT 1 FROM usuario_empresa WHERE usuario_id = ? AND empresa_id = ?`,
+    [usuarioId, empresaId]
+  );
+  return rows.length > 0;
 }
 
 
