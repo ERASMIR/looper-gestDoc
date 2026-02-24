@@ -46,7 +46,7 @@ export async function obtenerArchivos(tipo = null, usuarioId = null, empresaId =
   let query;
   if (tipo === 'matriz') {
     query = `
-      SELECT 
+      SELECT
         t.id,
         t.id_usuario,
         t.empresa_id,
@@ -55,6 +55,7 @@ export async function obtenerArchivos(tipo = null, usuarioId = null, empresaId =
         t.url_web,
         t.fecha_carga,
         t.tamano_archivo AS size,
+        t.column_map,
         CONCAT(u.nombre, ' ', u.apellidos) AS usuario_nombre
       FROM matriz_materiales t
       LEFT JOIN datos_usuarios u ON t.id_usuario = u.id
@@ -63,7 +64,7 @@ export async function obtenerArchivos(tipo = null, usuarioId = null, empresaId =
     `;
   } else if (tipo === 'ventas') {
     query = `
-      SELECT 
+      SELECT
         t.id,
         t.id_usuario,
         t.empresa_id,
@@ -72,6 +73,7 @@ export async function obtenerArchivos(tipo = null, usuarioId = null, empresaId =
         t.url_web,
         t.fecha_carga,
         t.tamano_archivo AS size,
+        t.column_map,
         CONCAT(u.nombre, ' ', u.apellidos) AS usuario_nombre
       FROM registro_ventas t
       LEFT JOIN datos_usuarios u ON t.id_usuario = u.id
