@@ -87,7 +87,13 @@ export async function obtenerArchivos(tipo = null, usuarioId = null, empresaId =
   console.log('🔎 SQL obtenerArchivos:', { tipo, where, params });
 
   const [rows] = await pool.query(query, params);
-  return { [tipo]: rows };
+  const parsed = rows.map(row => ({
+    ...row,
+    column_map: typeof row.column_map === 'string'
+      ? (() => { try { return JSON.parse(row.column_map); } catch { return null; } })()
+      : row.column_map
+  }));
+  return { [tipo]: parsed };
 }
 
 
@@ -125,6 +131,7 @@ export async function obtenerReportesRep(usuarioId = null, empresaId = null) {
       t.periodo_anio,
       t.periodo_mes,
       t.result_reporte,
+      t.url_declaracion,
       CONCAT(u.nombre, ' ', u.apellidos) AS usuario_nombre
     FROM reporte_rep t
     LEFT JOIN datos_usuarios u ON t.id_usuario = u.id
